@@ -1,143 +1,90 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>WhatsApp‑like Chat</title>
-
-    <!-- Latest stable PeerJS -->
-    <script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
-
-    <!-- ⚠️  UI/CSS तुमच्या मूळ फाइलमधीलच आहे; काहीही बदललेले नाही -->
-    <style>
-        body{font-family:sans-serif;margin:0;padding:1rem;background:#f5f5f5}
-        #app{max-width:480px;margin:0 auto;background:#fff;padding:1rem;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,.1)}
-        #chat-box{height:260px;overflow-y:auto;border:1px solid #ccc;border-radius:6px;padding:6px;margin:8px 0;background:#fafafa}
-        #chat-box div{margin-bottom:4px}
-        .me{color:#0b7285;font-weight:600}
-        .other{color:#495057}
-        input,button{padding:8px;font-size:1rem;border-radius:4px;border:1px solid #ccc}
-        button{cursor:pointer;background:#0d6efd;color:#fff;border:none}
-        button:disabled{opacity:.6;cursor:not-allowed}
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Temp Chat (App Prototype)</title>
+  <!-- Firebase SDK (v10 compat) -->
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore-compat.js"></script>
+  <!-- Crypto‑JS for simple AES end‑to‑end encryption -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+  <!-- Minimal inline styling (you can redesign later) -->
+  <style>
+    body {font-family: system-ui, sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh;}
+    #chat {flex: 1; overflow-y: auto; padding: 12px; background:#f5f5f5;}
+    #controls {display: flex; border-top: 1px solid #ddd;}
+    #msgInput {flex: 1; padding: 8px; font-size: 15px; border: none; outline: none;}
+    #sendBtn {padding: 0 16px; font-size: 15px; border: none; cursor: pointer; background:#2196f3; color:#fff;}
+  </style>
 </head>
 <body>
-<div id="app">
-    <h3 id="status">Initializing chat…</h3>
-    <p>My ID: <span id="peer-id">--</span></p>
+  <div id="chat"><!-- Messages will stream here --></div>
+  <div id="controls">
+    <input id="msgInput" autocomplete="off" placeholder="Message" />
+    <button id="sendBtn">Send</button>
+  </div>
 
-    <input id="connect-id" type="text" placeholder="Remote peer ID" style="width:65%">
-    <button id="connect-btn" style="width:32%">Connect</button>
-    <p style="margin:4px 0;min-height:18px"><small id="chat-status"></small></p>
+  <script>
+    // 1⃣  Replace with **your own** Firebase config (Project Settings ▸ Web App).
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_PROJECT_ID.appspot.com",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
 
-    <div id="chat-box"></div>
+    // 2⃣  Shared secret for E2E encryption (hard‑coded demo) — generate / negotiate per room in a real app.
+    const SECRET_KEY = "mySuperSecretKey"; // ⚠️ Change this & never commit real keys!
 
-    <input id="message-input" type="text" placeholder="Type message" style="width:75%">
-    <button id="send-btn" style="width:23%">Send</button>
-</div>
+    // 3⃣  Room ID — could be dynamic (URL param etc.)
+    const ROOM_ID = "defaultRoom";
 
-<script>
-// ----- PeerJS initialisation -----
-const peer = new Peer({
-  host: location.hostname,
-  port: location.protocol === 'https:' ? 443 : 9000,  // 🛈 तुमचा PeerJS server पोर्ट जर वेगळा असेल तर बदला
-  path: '/peerjs',
-  secure: location.protocol === 'https:',
-  debug: 2,
-  config: {
-    iceServers: [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' }
-      // TURN server आवश्यकता असल्यास खाली extra entry add करा
-      // { urls: 'turn:YOUR_TURN_SERVER', username: 'user', credential: 'pass' }
-    ]
-  }
-});
+    // --- Firebase init ---
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
 
-let conn = null;            // Active data connection
+    // DOM refs
+    const chatEl    = document.getElementById("chat");
+    const inputEl   = document.getElementById("msgInput");
+    const sendBtnEl = document.getElementById("sendBtn");
 
-// 👉 Peer open → Ready
-peer.on('open', id => {
-  document.getElementById('peer-id').textContent = id;
-  document.getElementById('status').textContent  = 'Ready';
-});
+    // Append message to UI
+    function appendMessage(sender, text) {
+      const div = document.createElement("div");
+      div.textContent = `${sender}: ${text}`;
+      chatEl.appendChild(div);
+      chatEl.scrollTop = chatEl.scrollHeight;
+    }
 
-// 👉 Incoming connection handler
-peer.on('connection', incoming => {
-  if (conn) incoming.close();   // Allow only one connection at a time
-  conn = incoming;
-  prepareConn();
-});
+    // Send message
+    sendBtnEl.addEventListener("click", () => {
+      const plain = inputEl.value.trim();
+      if (!plain) return;
+      const cipher = CryptoJS.AES.encrypt(plain, SECRET_KEY).toString();
+      db.collection("rooms").doc(ROOM_ID).collection("messages").add({
+        text: cipher,
+        ts: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      inputEl.value = "";
+    });
 
-// 👉 Attempt outgoing connection
-function connectToPeer() {
-  const remoteId = document.getElementById('connect-id').value.trim();
-  if (!remoteId) return alert('Enter remote ID first');
-  if (conn) conn.close();
-  conn = peer.connect(remoteId, { reliable: true });
-  prepareConn();
-}
-
-// 👉 Common connection lifecycle
-function prepareConn() {
-  if (!conn) return;
-  document.getElementById('chat-status').textContent = 'Connecting…';
-
-  conn.on('open', () => {
-    document.getElementById('chat-status').textContent = 'Connected';
-  });
-
-  conn.on('data', data => appendMsg('Friend', data, 'other'));
-
-  conn.on('close', () => {
-    document.getElementById('chat-status').textContent = 'Disconnected';
-  });
-
-  conn.on('error', err => {
-    console.error('[Conn error]', err);
-    document.getElementById('chat-status').textContent = 'Error: ' + err.type;
-  });
-}
-
-// 👉 Send message
-function sendMessage() {
-  const box = document.getElementById('message-input');
-  const text = box.value.trim();
-  if (!text || !conn || !conn.open) return;
-  conn.send(text);
-  appendMsg('You', text, 'me');
-  box.value = '';
-}
-
-// 👉 Append message to chat-box
-function appendMsg(sender, text, cls) {
-  const line = document.createElement('div');
-  line.className = cls;
-  line.textContent = `${sender}: ${text}`;
-  const chat = document.getElementById('chat-box');
-  chat.appendChild(line);
-  chat.scrollTop = chat.scrollHeight;
-}
-
-// 👉 Reconnect logic (max 5 attempts every 3s)
-let retries = 0;
-peer.on('disconnected', () => {
-  if (retries >= 5) return;
-  document.getElementById('chat-status').textContent = 'Reconnecting…';
-  setTimeout(() => {
-    retries++;
-    peer.reconnect();
-  }, 3000);
-});
-
-// 👉 UI bindings
-
-document.getElementById('connect-btn').addEventListener('click', connectToPeer);
-document.getElementById('send-btn').addEventListener('click', sendMessage);
-
-document.getElementById('message-input').addEventListener('keyup', e => {
-  if (e.key === 'Enter') sendMessage();
-});
-</script>
+    // Listen for new messages (ordered by timestamp)
+    db.collection("rooms").doc(ROOM_ID).collection("messages")
+      .orderBy("ts")
+      .onSnapshot(snapshot => {
+        snapshot.docChanges().forEach(change => {
+          if (change.type === "added") {
+            const { text } = change.doc.data();
+            // Decrypt with the shared secret
+            const plain = CryptoJS.AES.decrypt(text, SECRET_KEY).toString(CryptoJS.enc.Utf8);
+            const isLocal = change.doc.metadata.hasPendingWrites; // true if this tab sent it
+            appendMessage(isLocal ? "You" : "Peer", plain);
+          }
+        });
+      });
+  </script>
 </body>
 </html>
