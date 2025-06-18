@@ -2,24 +2,40 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>WhatsApp-like Chat</title>
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
             --primary: #128C7E;
             --primary-dark: #075E54;
-            --white: #ffffff;
-            --gray: #cccccc;
-            --text-dark: #333333;
+            --primary-light: #25D366;
+            --background: #e5ddd5;
+            --chat-bg: #dcf8c6;
+            --text-dark: #333;
+            --text-light: #888;
+            --white: #fff;
+            --border-radius: 8px;
+            --header-height: 60px;
+            --input-height: 60px;
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
         }
         
         body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: var(--white);
+            font-family: 'Roboto', sans-serif;
+            background: var(--background);
             color: var(--text-dark);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
         }
         
         .app-container {
@@ -28,83 +44,287 @@
             height: 100vh;
             max-width: 800px;
             margin: 0 auto;
+            width: 100%;
+            background: var(--white);
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            position: relative;
+            overflow: hidden;
         }
         
-        /* Loading Screen */
-        .loading-screen {
+        /* Header */
+        .header {
+            background: var(--primary-dark);
+            color: var(--white);
+            padding: 10px 15px;
+            height: var(--header-height);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: relative;
+            z-index: 10;
+        }
+        
+        .header-title {
+            font-size: 1.2rem;
+            font-weight: 500;
+        }
+        
+        .header-actions {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .header-icon {
+            font-size: 1.2rem;
+            cursor: pointer;
+        }
+        
+        /* Connection Info */
+        .connection-info {
+            background: var(--primary);
+            color: var(--white);
+            padding: 10px 15px;
+            font-size: 0.9rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ccc;
+        }
+        
+        .status-indicator.connected {
+            background: #4CAF50;
+        }
+        
+        .peer-id {
+            font-family: monospace;
+            font-size: 0.8rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 150px;
+        }
+        
+        /* Chat Area */
+        .chat-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+            background-image: url('https://web.whatsapp.com/img/bg-chat-tile-light_a4be512e7195b6b733d9110b408f075d.png');
+            background-repeat: repeat;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .message {
+            max-width: 80%;
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            border-radius: var(--border-radius);
+            position: relative;
+            word-wrap: break-word;
+        }
+        
+        .received {
+            align-self: flex-start;
+            background: var(--white);
+            border-top-left-radius: 0;
+        }
+        
+        .sent {
+            align-self: flex-end;
+            background: var(--chat-bg);
+            border-top-right-radius: 0;
+        }
+        
+        .message-time {
+            font-size: 0.7rem;
+            color: var(--text-light);
+            text-align: right;
+            margin-top: 3px;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 3px;
+        }
+        
+        .sent .message-time {
+            color: var(--primary-dark);
+        }
+        
+        /* Input Area */
+        .input-area {
+            background: var(--white);
+            padding: 8px 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-top: 1px solid #eee;
+            min-height: var(--input-height);
+        }
+        
+        .message-input {
+            flex: 1;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 20px;
+            background: var(--white);
+            font-size: 1rem;
+            outline: none;
+            box-shadow: 0 0 0 1px #ddd;
+        }
+        
+        .message-input:focus {
+            box-shadow: 0 0 0 1px var(--primary);
+        }
+        
+        .send-button {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: var(--white);
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        
+        .send-button:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+        }
+        
+        /* Connection Modal */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+        
+        .modal.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+        
+        .modal-content {
+            background: var(--white);
+            padding: 20px;
+            border-radius: var(--border-radius);
+            width: 90%;
+            max-width: 400px;
+        }
+        
+        .modal-title {
+            font-size: 1.2rem;
+            margin-bottom: 15px;
+            color: var(--primary-dark);
+        }
+        
+        .modal-input {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+        
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+        
+        .modal-button {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .modal-primary {
+            background: var(--primary);
+            color: var(--white);
+        }
+        
+        /* Empty State */
+        .empty-state {
+            flex: 1;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            height: 100vh;
             text-align: center;
             padding: 20px;
+            color: var(--text-light);
         }
         
-        .loading-spinner {
-            border: 4px solid var(--gray);
-            border-top: 4px solid var(--primary);
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin-bottom: 20px;
+        .empty-icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+            color: var(--primary);
         }
         
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
         
-        /* Error Screen */
-        .error-screen {
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            text-align: center;
-            padding: 20px;
-            color: #ff3333;
+        .message {
+            animation: fadeIn 0.2s ease-out;
         }
         
-        /* Main App (initially hidden) */
-        .main-app {
-            display: none;
-            flex-direction: column;
-            height: 100%;
+        /* Responsive */
+        @media (max-width: 600px) {
+            .app-container {
+                max-width: 100%;
+            }
+            
+            .header-title {
+                font-size: 1rem;
+            }
+            
+            .peer-id {
+                max-width: 100px;
+            }
         }
-        
-        /* [Rest of your existing CSS styles] */
     </style>
 </head>
 <body>
-    <!-- Loading Screen -->
-    <div class="loading-screen" id="loadingScreen">
-        <div class="loading-spinner"></div>
-        <h2>Initializing chat...</h2>
-        <p id="loadingStatus">Connecting to PeerJS server</p>
-    </div>
-    
-    <!-- Error Screen -->
-    <div class="error-screen" id="errorScreen">
-        <h2>⚠️ Connection Error</h2>
-        <p id="errorMessage">Failed to initialize chat</p>
-        <button id="retryButton" style="margin-top: 20px; padding: 10px 20px; background: var(--primary); color: white; border: none; border-radius: 5px;">
-            Retry Connection
-        </button>
-    </div>
-    
-    <!-- Main App -->
-    <div class="main-app" id="mainApp">
-        <!-- [Your existing app HTML structure] -->
+    <div class="app-container">
+        <!-- Header -->
         <div class="header">
             <div class="header-title">WhatsApp-like Chat</div>
             <div class="header-actions">
+                <i class="fas fa-search header-icon"></i>
                 <i class="fas fa-ellipsis-v header-icon" id="menuBtn"></i>
             </div>
         </div>
         
+        <!-- Connection Info -->
         <div class="connection-info">
             <div class="connection-status">
                 <div class="status-indicator" id="statusIndicator"></div>
@@ -113,14 +333,19 @@
             <div class="peer-id" id="my-id">Generating ID...</div>
         </div>
         
+        <!-- Chat Area -->
         <div class="chat-container" id="chatContainer">
             <div class="empty-state" id="emptyState">
+                <div class="empty-icon">
+                    <i class="fas fa-comments"></i>
+                </div>
                 <h3>Start a conversation</h3>
                 <p>Connect with a peer to start chatting</p>
             </div>
             <div id="chatMessages"></div>
         </div>
         
+        <!-- Input Area -->
         <div class="input-area">
             <input type="text" class="message-input" id="messageInput" placeholder="Type a message..." disabled>
             <button class="send-button" id="sendButton" disabled>
@@ -128,79 +353,306 @@
             </button>
         </div>
     </div>
-
+    
+    <!-- Connection Modal -->
+    <div class="modal" id="connectionModal">
+        <div class="modal-content">
+            <div class="modal-title">Connect to Peer</div>
+            <input type="text" class="modal-input" id="peerIdInput" placeholder="Enter peer ID">
+            <div class="modal-actions">
+                <button class="modal-button" id="cancelConnectBtn">Cancel</button>
+                <button class="modal-button modal-primary" id="confirmConnectBtn">Connect</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- ID Modal -->
+    <div class="modal" id="idModal">
+        <div class="modal-content">
+            <div class="modal-title">Your Peer ID</div>
+            <div style="margin-bottom: 15px;">
+                <p>Share this ID with others to connect:</p>
+                <div style="background: #f5f5f5; padding: 10px; border-radius: 4px; word-break: break-all;" id="displayId"></div>
+            </div>
+            <div class="modal-actions">
+                <button class="modal-button modal-primary" id="copyIdBtn">Copy ID</button>
+            </div>
+        </div>
+    </div>
+    
     <script>
-        // 1. First show loading screen
-        const loadingScreen = document.getElementById('loadingScreen');
-        const errorScreen = document.getElementById('errorScreen');
-        const mainApp = document.getElementById('mainApp');
-        const loadingStatus = document.getElementById('loadingStatus');
-        
-        // 2. Initialize with error handling
-        function initializeApp() {
-            loadingScreen.style.display = 'flex';
-            errorScreen.style.display = 'none';
-            mainApp.style.display = 'none';
-            
-            loadingStatus.textContent = 'Initializing PeerJS...';
-            
-            try {
-                initializePeer();
-            } catch (err) {
-                showError('Failed to initialize: ' + err.message);
-            }
-        }
-        
-        // 3. Improved PeerJS initialization
-        function initializePeer() {
-            const userId = generateUserId();
-            
-            // Configuration with fallback servers
-            peer = new Peer(userId, {
-                debug: 3,
-                config: {
-                    iceServers: [
-                        { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' },
-                        { urls: 'stun:stun2.l.google.com:19302' }
-                    ]
+        // Generate a persistent user ID
+        function generateUserId() {
+            let userId = localStorage.getItem('peerChatUserId');
+            if (!userId) {
+                const navigatorInfo = [
+                    navigator.userAgent,
+                    navigator.hardwareConcurrency,
+                    navigator.deviceMemory,
+                    screen.width + 'x' + screen.height,
+                    new Date().getTime()
+                ].join('|');
+                
+                let hash = 0;
+                for (let i = 0; i < navigatorInfo.length; i++) {
+                    const char = navigatorInfo.charCodeAt(i);
+                    hash = ((hash << 5) - hash) + char;
+                    hash |= 0;
                 }
-            });
+                
+                userId = 'user-' + Math.abs(hash).toString(36).substring(0, 8);
+                localStorage.setItem('peerChatUserId', userId);
+            }
+            return userId;
+        }
+
+        // DOM Elements
+        const myIdElement = document.getElementById('my-id');
+        const statusIndicator = document.getElementById('statusIndicator');
+        const connectionStatusText = document.getElementById('connectionStatusText');
+        const chatContainer = document.getElementById('chatContainer');
+        const chatMessages = document.getElementById('chatMessages');
+        const emptyState = document.getElementById('emptyState');
+        const messageInput = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
+        const menuBtn = document.getElementById('menuBtn');
+        const connectionModal = document.getElementById('connectionModal');
+        const peerIdInput = document.getElementById('peerIdInput');
+        const confirmConnectBtn = document.getElementById('confirmConnectBtn');
+        const cancelConnectBtn = document.getElementById('cancelConnectBtn');
+        const idModal = document.getElementById('idModal');
+        const displayId = document.getElementById('displayId');
+        const copyIdBtn = document.getElementById('copyIdBtn');
+
+        // Generate user ID
+        const userId = generateUserId();
+        let peer;
+        let conn;
+        let isConnected = false;
+
+        // Initialize PeerJS
+        function initializePeer() {
+            peer = new Peer(userId);
             
             peer.on('open', (id) => {
-                console.log('Connected with ID:', id);
-                document.getElementById('my-id').textContent = id;
-                
-                // Hide loading, show main app
-                loadingScreen.style.display = 'none';
-                mainApp.style.display = 'flex';
-                updateConnectionStatus(true, 'Ready to connect');
+                myIdElement.textContent = id;
+                updateConnectionStatus(false);
             });
-            
+
             peer.on('error', (err) => {
                 console.error('PeerJS error:', err);
-                showError('Connection error: ' + err.message);
+                updateConnectionStatus(false, 'Error: ' + err.message);
+            });
+
+            // Handle incoming connections
+            peer.on('connection', (connection) => {
+                if (isConnected) {
+                    connection.close();
+                    showNotification('Already connected to another peer');
+                    return;
+                }
+                
+                conn = connection;
+                setupConnection(conn);
+                updateConnectionStatus(true, `Connected to ${conn.peer.substring(0, 8)}...`);
+                addSystemMessage(`Connected to ${conn.peer}`);
             });
         }
-        
-        // 4. Error handling
-        function showError(message) {
-            loadingScreen.style.display = 'none';
-            errorScreen.style.display = 'flex';
-            document.getElementById('errorMessage').textContent = message;
-            console.error(message);
+
+        // Set up a data connection
+        function setupConnection(connection) {
+            isConnected = true;
+            updateUI();
+            
+            connection.on('data', (data) => {
+                const message = JSON.parse(data);
+                addMessageToChat(message.text, false, message.sender || 'Peer', message.timestamp);
+            });
+
+            connection.on('close', () => {
+                updateConnectionStatus(false, 'Disconnected');
+                isConnected = false;
+                updateUI();
+                addSystemMessage('Disconnected from peer');
+            });
+
+            connection.on('error', (err) => {
+                console.error('Connection error:', err);
+                updateConnectionStatus(false, 'Connection error');
+                isConnected = false;
+                updateUI();
+                addSystemMessage('Connection error: ' + err.message);
+            });
         }
-        
-        // 5. Retry functionality
-        document.getElementById('retryButton').addEventListener('click', initializeApp);
-        
-        // 6. Start the app
-        document.addEventListener('DOMContentLoaded', initializeApp);
-        
-        // [Rest of your existing JavaScript functions]
+
+        // Update connection status UI
+        function updateConnectionStatus(connected, text) {
+            if (connected) {
+                statusIndicator.classList.add('connected');
+                statusIndicator.classList.remove('disconnected');
+                connectionStatusText.textContent = text || 'Connected';
+            } else {
+                statusIndicator.classList.remove('connected');
+                statusIndicator.classList.add('disconnected');
+                connectionStatusText.textContent = text || 'Disconnected';
+            }
+        }
+
+        // Update UI based on connection state
+        function updateUI() {
+            messageInput.disabled = !isConnected;
+            sendButton.disabled = !isConnected;
+            
+            if (isConnected) {
+                emptyState.style.display = 'none';
+            } else if (chatMessages.children.length === 0) {
+                emptyState.style.display = 'flex';
+            }
+        }
+
+        // Add a message to the chat UI
+        function addMessageToChat(text, isSent, sender, timestamp) {
+            emptyState.style.display = 'none';
+            
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message');
+            messageElement.classList.add(isSent ? 'sent' : 'received');
+            
+            messageElement.innerHTML = `
+                <div>${text}</div>
+                <div class="message-time">
+                    ${timestamp || new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                    ${isSent ? '<i class="fas fa-check"></i>' : ''}
+                </div>
+            `;
+            
+            chatMessages.appendChild(messageElement);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        // Add a system message
+        function addSystemMessage(text) {
+            const messageElement = document.createElement('div');
+            messageElement.style.textAlign = 'center';
+            messageElement.style.margin = '10px 0';
+            messageElement.style.color = 'var(--text-light)';
+            messageElement.style.fontSize = '0.8rem';
+            messageElement.textContent = text;
+            chatMessages.appendChild(messageElement);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        // Send a message
+        function sendMessage() {
+            const text = messageInput.value.trim();
+            if (!text || !conn) return;
+            
+            const messageData = {
+                text: text,
+                timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                sender: 'You'
+            };
+            
+            conn.send(JSON.stringify(messageData));
+            addMessageToChat(text, true, 'You', messageData.timestamp);
+            messageInput.value = '';
+        }
+
+        // Show notification
+        function showNotification(text) {
+            const notification = document.createElement('div');
+            notification.style.position = 'fixed';
+            notification.style.bottom = '20px';
+            notification.style.left = '50%';
+            notification.style.transform = 'translateX(-50%)';
+            notification.style.background = 'rgba(0,0,0,0.7)';
+            notification.style.color = 'white';
+            notification.style.padding = '10px 20px';
+            notification.style.borderRadius = '20px';
+            notification.style.zIndex = '1000';
+            notification.textContent = text;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 3000);
+        }
+
+        // Event Listeners
+        sendButton.addEventListener('click', sendMessage);
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        menuBtn.addEventListener('click', () => {
+            displayId.textContent = peer.id;
+            idModal.classList.add('active');
+        });
+
+        copyIdBtn.addEventListener('click', () => {
+            navigator.clipboard.writeText(peer.id).then(() => {
+                showNotification('Copied to clipboard!');
+                idModal.classList.remove('active');
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                showNotification('Failed to copy ID');
+            });
+        });
+
+        document.getElementById('header').addEventListener('click', () => {
+            connectionModal.classList.add('active');
+        });
+
+        confirmConnectBtn.addEventListener('click', () => {
+            const peerId = peerIdInput.value.trim();
+            if (!peerId) {
+                showNotification('Please enter a peer ID');
+                return;
+            }
+            
+            if (peerId === peer.id) {
+                showNotification('You cannot connect to yourself');
+                return;
+            }
+            
+            connectionModal.classList.remove('active');
+            updateConnectionStatus(false, 'Connecting...');
+            
+            conn = peer.connect(peerId);
+            
+            conn.on('open', () => {
+                setupConnection(conn);
+                updateConnectionStatus(true, `Connected to ${conn.peer.substring(0, 8)}...`);
+                addSystemMessage(`Connected to ${conn.peer}`);
+            });
+            
+            conn.on('error', (err) => {
+                console.error('Connection error:', err);
+                updateConnectionStatus(false, 'Connection failed');
+                showNotification('Connection failed: ' + err.message);
+            });
+        });
+
+        cancelConnectBtn.addEventListener('click', () => {
+            connectionModal.classList.remove('active');
+        });
+
+        idModal.addEventListener('click', (e) => {
+            if (e.target === idModal) {
+                idModal.classList.remove('active');
+            }
+        });
+
+        connectionModal.addEventListener('click', (e) => {
+            if (e.target === connectionModal) {
+                connectionModal.classList.remove('active');
+            }
+        });
+
+        // Initialize the app
+        initializePeer();
     </script>
-    
-    <!-- Load Font Awesome if needed -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
 </body>
 </html>
