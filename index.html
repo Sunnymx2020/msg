@@ -6,149 +6,201 @@
     <title>WhatsApp-like Chat</title>
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <style>
-        /* [Keep all your existing CSS styles] */
+        :root {
+            --primary: #128C7E;
+            --primary-dark: #075E54;
+            --white: #ffffff;
+            --gray: #cccccc;
+            --text-dark: #333333;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--white);
+            color: var(--text-dark);
+        }
+        
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        /* Loading Screen */
+        .loading-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .loading-spinner {
+            border: 4px solid var(--gray);
+            border-top: 4px solid var(--primary);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Error Screen */
+        .error-screen {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            text-align: center;
+            padding: 20px;
+            color: #ff3333;
+        }
+        
+        /* Main App (initially hidden) */
+        .main-app {
+            display: none;
+            flex-direction: column;
+            height: 100%;
+        }
+        
+        /* [Rest of your existing CSS styles] */
     </style>
 </head>
 <body>
-    <!-- [Keep all your existing HTML structure] -->
+    <!-- Loading Screen -->
+    <div class="loading-screen" id="loadingScreen">
+        <div class="loading-spinner"></div>
+        <h2>Initializing chat...</h2>
+        <p id="loadingStatus">Connecting to PeerJS server</p>
+    </div>
+    
+    <!-- Error Screen -->
+    <div class="error-screen" id="errorScreen">
+        <h2>⚠️ Connection Error</h2>
+        <p id="errorMessage">Failed to initialize chat</p>
+        <button id="retryButton" style="margin-top: 20px; padding: 10px 20px; background: var(--primary); color: white; border: none; border-radius: 5px;">
+            Retry Connection
+        </button>
+    </div>
+    
+    <!-- Main App -->
+    <div class="main-app" id="mainApp">
+        <!-- [Your existing app HTML structure] -->
+        <div class="header">
+            <div class="header-title">WhatsApp-like Chat</div>
+            <div class="header-actions">
+                <i class="fas fa-ellipsis-v header-icon" id="menuBtn"></i>
+            </div>
+        </div>
+        
+        <div class="connection-info">
+            <div class="connection-status">
+                <div class="status-indicator" id="statusIndicator"></div>
+                <span id="connectionStatusText">Disconnected</span>
+            </div>
+            <div class="peer-id" id="my-id">Generating ID...</div>
+        </div>
+        
+        <div class="chat-container" id="chatContainer">
+            <div class="empty-state" id="emptyState">
+                <h3>Start a conversation</h3>
+                <p>Connect with a peer to start chatting</p>
+            </div>
+            <div id="chatMessages"></div>
+        </div>
+        
+        <div class="input-area">
+            <input type="text" class="message-input" id="messageInput" placeholder="Type a message..." disabled>
+            <button class="send-button" id="sendButton" disabled>
+                <i class="fas fa-paper-plane"></i>
+            </button>
+        </div>
+    </div>
 
     <script>
-        // Improved connection handling
-        let peer;
-        let conn;
-        let retryCount = 0;
-        const maxRetries = 3;
-
-        // 1. Generate more reliable user ID
-        function generateUserId() {
-            let userId = localStorage.getItem('peerChatUserId');
-            if (!userId) {
-                userId = 'user-' + Math.random().toString(36).substring(2, 10) + 
-                         '-' + Date.now().toString(36);
-                localStorage.setItem('peerChatUserId', userId);
+        // 1. First show loading screen
+        const loadingScreen = document.getElementById('loadingScreen');
+        const errorScreen = document.getElementById('errorScreen');
+        const mainApp = document.getElementById('mainApp');
+        const loadingStatus = document.getElementById('loadingStatus');
+        
+        // 2. Initialize with error handling
+        function initializeApp() {
+            loadingScreen.style.display = 'flex';
+            errorScreen.style.display = 'none';
+            mainApp.style.display = 'none';
+            
+            loadingStatus.textContent = 'Initializing PeerJS...';
+            
+            try {
+                initializePeer();
+            } catch (err) {
+                showError('Failed to initialize: ' + err.message);
             }
-            return userId;
         }
-
-        // 2. Initialize PeerJS with error handling
+        
+        // 3. Improved PeerJS initialization
         function initializePeer() {
             const userId = generateUserId();
-            document.getElementById('my-id').textContent = userId;
             
-            // Create Peer with debug logging
+            // Configuration with fallback servers
             peer = new Peer(userId, {
-                debug: 3, // Enable verbose logging
+                debug: 3,
                 config: {
                     iceServers: [
                         { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:global.stun.twilio.com:3478?transport=udp' }
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun2.l.google.com:19302' }
                     ]
                 }
             });
-
+            
             peer.on('open', (id) => {
-                console.log('PeerJS connected with ID:', id);
+                console.log('Connected with ID:', id);
                 document.getElementById('my-id').textContent = id;
+                
+                // Hide loading, show main app
+                loadingScreen.style.display = 'none';
+                mainApp.style.display = 'flex';
                 updateConnectionStatus(true, 'Ready to connect');
-                retryCount = 0; // Reset retry counter on success
             });
-
+            
             peer.on('error', (err) => {
                 console.error('PeerJS error:', err);
-                
-                // Handle specific error cases
-                if (err.type === 'unavailable-id') {
-                    // Generate new ID if current one is unavailable
-                    localStorage.removeItem('peerChatUserId');
-                    initializePeer();
-                } else if (retryCount < maxRetries) {
-                    // Retry connection
-                    retryCount++;
-                    console.log(`Retrying connection (attempt ${retryCount})...`);
-                    setTimeout(initializePeer, 2000 * retryCount);
-                } else {
-                    updateConnectionStatus(false, 'Connection failed');
-                }
-            });
-
-            peer.on('connection', (connection) => {
-                console.log('Incoming connection from:', connection.peer);
-                handleNewConnection(connection);
+                showError('Connection error: ' + err.message);
             });
         }
-
-        // 3. Improved connection handling
-        function handleNewConnection(connection) {
-            if (conn) {
-                console.log('Already connected, rejecting new connection');
-                connection.close();
-                return;
-            }
-
-            conn = connection;
-            
-            conn.on('open', () => {
-                console.log('Connection established with:', conn.peer);
-                updateConnectionStatus(true, `Connected to ${conn.peer.substring(0, 8)}...`);
-                addSystemMessage(`Connected to ${conn.peer}`);
-                setupDataChannel();
-            });
-
-            conn.on('close', () => {
-                console.log('Connection closed');
-                handleDisconnection();
-            });
-
-            conn.on('error', (err) => {
-                console.error('Connection error:', err);
-                handleDisconnection();
-            });
+        
+        // 4. Error handling
+        function showError(message) {
+            loadingScreen.style.display = 'none';
+            errorScreen.style.display = 'flex';
+            document.getElementById('errorMessage').textContent = message;
+            console.error(message);
         }
-
-        // 4. Data channel setup
-        function setupDataChannel() {
-            conn.on('data', (data) => {
-                try {
-                    const message = JSON.parse(data);
-                    addMessageToChat(message.text, false, message.sender || 'Peer', message.timestamp);
-                } catch (e) {
-                    console.error('Error parsing message:', e);
-                }
-            });
-        }
-
-        // 5. Connection status UI updates
-        function updateConnectionStatus(connected, message) {
-            const indicator = document.getElementById('statusIndicator');
-            const statusText = document.getElementById('connectionStatusText');
-            
-            if (connected) {
-                indicator.className = 'status-indicator connected';
-                statusText.textContent = message || 'Connected';
-                document.getElementById('messageInput').disabled = false;
-                document.getElementById('sendButton').disabled = false;
-            } else {
-                indicator.className = 'status-indicator';
-                statusText.textContent = message || 'Disconnected';
-                document.getElementById('messageInput').disabled = true;
-                document.getElementById('sendButton').disabled = true;
-            }
-        }
-
-        // 6. Initialize when page loads
-        document.addEventListener('DOMContentLoaded', () => {
-            initializePeer();
-            
-            // Set up event listeners
-            document.getElementById('sendButton').addEventListener('click', sendMessage);
-            document.getElementById('messageInput').addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') sendMessage();
-            });
-            
-            // [Keep all your other existing event listeners]
-        });
-
-        // [Keep all your other existing functions]
+        
+        // 5. Retry functionality
+        document.getElementById('retryButton').addEventListener('click', initializeApp);
+        
+        // 6. Start the app
+        document.addEventListener('DOMContentLoaded', initializeApp);
+        
+        // [Rest of your existing JavaScript functions]
     </script>
+    
+    <!-- Load Font Awesome if needed -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
 </body>
 </html>
