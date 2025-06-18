@@ -606,4 +606,53 @@
         });
 
         confirmConnectBtn.addEventListener('click', () => {
-            const peerId = peerIdInput.
+            const peerId = peerIdInput.value.trim();
+            if (!peerId) {
+                showNotification('Please enter a peer ID');
+                return;
+            }
+            
+            if (peerId === peer.id) {
+                showNotification('You cannot connect to yourself');
+                return;
+            }
+            
+            connectionModal.classList.remove('active');
+            updateConnectionStatus(false, 'Connecting...');
+            
+            conn = peer.connect(peerId);
+            
+            conn.on('open', () => {
+                setupConnection(conn);
+                updateConnectionStatus(true, `Connected to ${conn.peer.substring(0, 8)}...`);
+                addSystemMessage(`Connected to ${conn.peer}`);
+            });
+            
+            conn.on('error', (err) => {
+                console.error('Connection error:', err);
+                updateConnectionStatus(false, 'Connection failed');
+                showNotification('Connection failed: ' + err.message);
+            });
+        });
+
+        cancelConnectBtn.addEventListener('click', () => {
+            connectionModal.classList.remove('active');
+        });
+
+        idModal.addEventListener('click', (e) => {
+            if (e.target === idModal) {
+                idModal.classList.remove('active');
+            }
+        });
+
+        connectionModal.addEventListener('click', (e) => {
+            if (e.target === connectionModal) {
+                connectionModal.classList.remove('active');
+            }
+        });
+
+        // Initialize the app
+        initializePeer();
+    </script>
+</body>
+</html>
