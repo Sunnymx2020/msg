@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Peer-to-Peer Chat</title>
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #4361ee;
+            --primary-dark: #3a56d4;
+            --danger: #f72585;
+            --gray: #6c757d;
+            --light: #f8f9fa;
+            --dark: #212529;
+            --border-radius: 8px;
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #f5f7fa;
+            color: var(--dark);
+            line-height: 1.6;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            color: var(--primary);
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .user-id-section {
+            background: white;
+            padding: 15px;
+            border-radius: var(--border-radius);
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .user-id {
+            font-family: monospace;
+            background: var(--light);
+            padding: 8px 12px;
+            border-radius: 4px;
+            word-break: break-all;
+        }
+        
+        .connection-section {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        input {
+            flex: 1;
+            padding: 10px 15px;
+            border: 1px solid #ddd;
+            border-radius: var(--border-radius);
+            font-size: 1rem;
+        }
+        
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: var(--border-radius);
+            background: var(--primary);
+            color: white;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background 0.2s;
+        }
+        
+        button:hover {
+            background: var(--primary-dark);
+        }
+        
+        button:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+        }
+        
+        .danger-btn {
+            background: var(--danger);
+        }
+        
+        .chat-container {
+            background: white;
+            border-radius: var(--border-radius);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            height: 400px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .chat-messages {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .message {
+            max-width: 80%;
+            padding: 10px 15px;
+            border-radius: 18px;
+            word-wrap: break-word;
+        }
+        
+        .received {
+            align-self: flex-start;
+            background: #e9ecef;
+            border-bottom-left-radius: 5px;
+        }
+        
+        .sent {
+            align-self: flex-end;
+            background: var(--primary);
+            color: white;
+            border-bottom-right-radius: 5px;
+        }
+        
+        .message-info {
+            font-size: 0.8rem;
+            opacity: 0.7;
+            margin-top: 3px;
+        }
+        
+        .chat-input {
+            display: flex;
+            padding: 15px;
+            border-top: 1px solid #e9ecef;
+        }
+        
+        .chat-input input {
+            flex: 1;
+            padding: 10px 15px;
+            border: 1px solid #ddd;
+            border-radius: var(--border-radius) 0 0 var(--border-radius);
+            font-size: 1rem;
+        }
+        
+        .chat-input button {
+            border-radius: 0 var(--border-radius) var(--border-radius) 0;
+        }
+        
+        .status {
+            text-align: center;
+            margin: 10px 0;
+            font-size: 0.9rem;
+            color: var(--gray);
+            min-height: 20px;
+        }
+        
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--primary);
+            color: white;
+            padding: 12px 20px;
+            border-radius: var(--border-radius);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transform: translateX(200%);
+            transition: transform 0.3s ease-out;
+        }
+        
+        .notification.show {
+            transform: translateX(0);
+        }
+    </style>
+</head>
+<body>
+    <h1>Peer-to-Peer Chat</h1>
+    
+    <div class="user-id-section">
+        <p>Your ID:</p>
+        <div class="user-id" id="my-id">Generating...</div>
+        <button id="copy-btn" style="margin-top: 10px;">Copy ID</button>
+    </div>
+    
+    <div class="connection-section">
+        <input type="text" id="peerIdInput" placeholder="Enter friend's ID">
+        <button id="connectBtn">Connect</button>
+        <button id="disconnectBtn" class="danger-btn" disabled>Disconnect</button>
+    </div>
+    
+    <div class="status" id="connectionStatus">Not connected</div>
+    
+    <div class="chat-container">
+        <div class="chat-messages" id="chatMessages">
+            <!-- Messages will appear here -->
+        </div>
+        <div class="chat-input">
+            <input type="text" id="messageInput" placeholder="Type a message..." disabled>
+            <button id="sendMessageBtn" disabled>Send</button>
+        </div>
+    </div>
+    
+    <div class="notification" id="notification">Copied to clipboard!</div>
+    
+    <script>
+        // Generate a persistent user ID based on device characteristics
+        function generateUserId() {
+            // Try to get a stored ID first
+            let userId = localStorage.getItem('peerChatUserId');
+            
+            if (!userId) {
+                // Create a new ID based on available device info
+                const navigatorInfo = [
+                    navigator.userAgent,
+                    navigator.hardwareConcurrency,
+                    navigator.deviceMemory,
+                    screen.width + 'x' + screen.height
+                ].join('|');
+                
+                // Simple hash function
+                let hash = 0;
+                for (let i = 0; i < navigatorInfo.length; i++) {
+                    const char = navigatorInfo.charCodeAt(i);
+                    hash = ((hash << 5) - hash) + char;
+                    hash |= 0; // Convert to 32bit integer
+                }
+                
+                userId = 'user-' + Math.abs(hash).toString(36).substring(0, 8);
+                localStorage.setItem('peerChatUserId', userId);
+            }
+            
+            return userId;
+        }
+
+        // DOM Elements
+        const myIdElement = document.getElementById('my-id');
+        const peerIdInput = document.getElementById('peerIdInput');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const connectionStatus = document.getElementById('connectionStatus');
+        const chatMessages = document.getElementById('chatMessages');
+        const messageInput = document.getElementById('messageInput');
+        const sendMessageBtn = document.getElementById('sendMessageBtn');
+        const copyButton = document.getElementById('copy-btn');
+        const notification = document.getElementById('notification');
+
+        // Generate user ID
+        const userId = generateUserId();
+        let peer;
+        let conn;
+        let isConnected = false;
+
+        // Initialize PeerJS
+        function initializePeer() {
+            peer = new Peer(userId);
+            
+            peer.on('open', (id) => {
+                myIdElement.textContent = id;
+                connectBtn.disabled = false;
+                connectionStatus.textContent = 'Ready to connect';
+            });
+
+            peer.on('error', (err) => {
+                console.error('PeerJS error:', err);
+                connectionStatus.textContent = 'Error: ' + err.message;
+            });
+
+            // Handle incoming connections
+            peer.on('connection', (connection) => {
+                if (isConnected) {
+                    connection.close();
+                    showNotification('Already connected to another peer');
+                    return;
+                }
+                
+                conn = connection;
+                setupConnection(conn);
+                connectionStatus.textContent = `Connected to ${conn.peer}`;
+                isConnected = true;
+                updateUI();
+            });
+        }
+
+        // Set up a data connection
+        function setupConnection(connection) {
+            connection.on('data', (data) => {
+                addMessageToChat(JSON.parse(data), false);
+            });
+
+            connection.on('close', () => {
+                connectionStatus.textContent = 'Disconnected';
+                isConnected = false;
+                updateUI();
+                addSystemMessage('Disconnected from peer');
+            });
+
+            connection.on('error', (err) => {
+                console.error('Connection error:', err);
+                connectionStatus.textContent = 'Connection error';
+                isConnected = false;
+                updateUI();
+                addSystemMessage('Connection error: ' + err.message);
+            });
+        }
+
+        // Connect to another peer
+        connectBtn.addEventListener('click', () => {
+            const peerId = peerIdInput.value.trim();
+            if (!peerId) {
+                showNotification('Please enter a peer ID');
+                return;
+            }
+            
+            if (peerId === peer.id) {
+                showNotification('You cannot connect to yourself');
+                return;
+            }
+            
+            connectionStatus.textContent = 'Connecting...';
+            conn = peer.connect(peerId);
+            
+            conn.on('open', () => {
+                connectionStatus.textContent = `Connected to ${conn.peer}`;
+                isConnected = true;
+                updateUI();
+                addSystemMessage(`Connected to ${conn.peer}`);
+                setupConnection(conn);
+            });
+            
+            conn.on('error', (err) => {
+                console.error('Connection error:', err);
+                connectionStatus.textContent = 'Connection failed';
+                showNotification('Connection failed: ' + err.message);
+            });
+        });
+
+        // Disconnect from current peer
+        disconnectBtn.addEventListener('click', () => {
+            if (conn) {
+                conn.close();
+            }
+            isConnected = false;
+            connectionStatus.textContent = 'Disconnected';
+            updateUI();
+            addSystemMessage('Disconnected');
+        });
+
+        // Send a message
+        sendMessageBtn.addEventListener('click', sendMessage);
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message || !conn) return;
+            
+            const messageData = {
+                text: message,
+                timestamp: new Date().toLocaleTimeString(),
+                sender: 'You'
+            };
+            
+            conn.send(JSON.stringify(messageData));
+            addMessageToChat(messageData, true);
+            messageInput.value = '';
+        }
+
+        // Add a message to the chat UI
+        function addMessageToChat(message, isSent) {
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message');
+            messageElement.classList.add(isSent ? 'sent' : 'received');
+            
+            const messageText = document.createElement('div');
+            messageText.textContent = message.text;
+            
+            const messageInfo = document.createElement('div');
+            messageInfo.classList.add('message-info');
+            messageInfo.textContent = isSent ? message.timestamp : `${message.sender || 'Unknown'} • ${message.timestamp}`;
+            
+            messageElement.appendChild(messageText);
+            messageElement.appendChild(messageInfo);
+            
+            chatMessages.appendChild(messageElement);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Add a system message
+        function addSystemMessage(text) {
+            const messageElement = document.createElement('div');
+            messageElement.style.textAlign = 'center';
+            messageElement.style.margin = '10px 0';
+            messageElement.style.color = 'var(--gray)';
+            messageElement.style.fontSize = '0.9rem';
+            messageElement.textContent = text;
+            chatMessages.appendChild(messageElement);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Update UI based on connection state
+        function updateUI() {
+            connectBtn.disabled = isConnected;
+            disconnectBtn.disabled = !isConnected;
+            peerIdInput.disabled = isConnected;
+            messageInput.disabled = !isConnected;
+            sendMessageBtn.disabled = !isConnected;
+        }
+
+        // Copy ID to clipboard
+        copyButton.addEventListener('click', () => {
+            const id = myIdElement.textContent;
+            navigator.clipboard.writeText(id).then(() => {
+                showNotification('Copied to clipboard!');
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                showNotification('Failed to copy ID');
+            });
+        });
+
+        // Show notification
+        function showNotification(message) {
+            notification.textContent = message;
+            notification.classList.add('show');
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 2000);
+        }
+
+        // Initialize the app
+        initializePeer();
+    </script>
+</body>
+</html>
