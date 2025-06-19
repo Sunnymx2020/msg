@@ -1,95 +1,190 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Private Chat</title>
+  <title>Firebase Chat • Onboard → Chat</title>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0">
+  <!-- Firebase v8 SDKs -->
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
   <style>
-    body { font-family: sans-serif; background: #f5f5f5; padding: 10px; }
-    #chat { max-height: 400px; overflow-y: scroll; background: white; padding: 10px; border: 1px solid #ccc; margin-bottom: 10px; }
-    .msg { background: #e0f7fa; margin: 5px 0; padding: 8px; border-radius: 6px; font-size: 14px; }
-    input, button { padding: 8px; font-size: 16px; }
+    body{font-family:sans-serif;margin:0;padding:16px;background:#f5f5f5;}
+    h2,h3{margin:4px 0 12px}
+    input,select,button{padding:8px;font-size:15px;border:1px solid #ccc;border-radius:4px}
+    button{cursor:pointer}
+    #chatBox{height:55vh;overflow-y:auto;background:#fff;margin:8px 0;padding:8px;border:1px solid #ccc;border-radius:6px}
+    .msg{margin:6px 0;padding:6px 8px;border-radius:6px;max-width:75%}
+    .me{background:#c8e6c9;margin-left:auto}
+    .them{background:#e1f5fe}
+    #onboarding,#chatScreen{display:none}
   </style>
 </head>
 <body>
 
-  <h3>🔐 End-to-End Chat</h3>
+<!-- ── Onboarding Screen ───────────────────────────────────────────── -->
+<div id="onboarding">
+  <h2>Welcome 👋</h2>
+  <p>Pick a unique <b>username</b> and optional display‑picture URL.</p>
+  <input id="obName" placeholder="Username (e.g. suzzy)" style="width:100%;margin-bottom:8px"><br>
+  <input id="obDp"   placeholder="DP image URL (optional)" style="width:100%;margin-bottom:12px"><br>
+  <button onclick="completeOnboarding()">Save &amp; Continue ➜</button>
+</div>
 
-  <p>
-    Sender: <input id="sender" placeholder="user1" />
-    Receiver: <input id="receiver" placeholder="user2" />
-    DP URL: <input id="dp" placeholder="https://..." style="width: 60%;" />
-  </p>
+<!-- ── Chat Screen ─────────────────────────────────────────────────── -->
+<div id="chatScreen">
+  <h3 id="meHeader"></h3>
 
-  <div id="chat"></div>
+  <label for="receiverSel">Chat with:</label>
+  <select id="receiverSel" onchange="chooseReceiver()" style="margin-left:6px"></select>
 
-  <input id="msg" type="text" placeholder="Type a message..." style="width: 70%;">
-  <button onclick="send()">Send</button>
+  <div id="chatBox"></div>
 
-  <script>
-    // Firebase Config
-    var firebaseConfig = {
-      apiKey: "AIzaSyBPF1VE82Y3VkZe6IibjqKxBC-XHjM_Wco",
-      authDomain: "chat-2024-ff149.firebaseapp.com",
-      databaseURL: "https://chat-2024-ff149-default-rtdb.asia-southeast1.firebasedatabase.app",
-      projectId: "chat-2024-ff149",
-      storageBucket: "chat-2024-ff149.appspot.com",
-      messagingSenderId: "146349109253",
-      appId: "1:146349109253:android:e593afbf0584762519ac6c"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
+  <input id="msgInput" placeholder="Type a message…" style="width:70%">
+  <button onclick="sendMsg()">Send</button>
+</div>
 
-    // Send message
-    function send() {
-      const sender = document.getElementById("sender").value.trim();
-      const receiver = document.getElementById("receiver").value.trim();
-      const dp = document.getElementById("dp").value.trim();
-      const msg = document.getElementById("msg").value.trim();
+<script>
+/* ── 1. Firebase CONFIG with your keys ───────────────────────────── */
+var firebaseConfig = {
+  apiKey:            "AIzaSyBPF1VE82Y3VkZe6IibjqKxBC-XHjM_Wco",
+  authDomain:        "chat-2024-ff149.firebaseapp.com",
+  databaseURL:       "https://chat-2024-ff149-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:         "chat-2024-ff149",
+  storageBucket:     "chat-2024-ff149.appspot.com",
+  messagingSenderId: "146349109253",
+  appId:             "1:146349109253:android:e593afbf0584762519ac6c"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
 
-      if (sender && receiver && msg) {
-        const refPath = `chat/${sender}/${receiver}`;
-        const msgRef = db.ref(refPath).push();
+/* ── 2. Simple state ─────────────────────────────────────────────── */
+let me   = null;   // my username
+let meDp = "";     // my dp url
+let them = null;   // current receiver
+let chatListenerSent     = null;
+let chatListenerReceived = null;
 
-        msgRef.set({
-          sender: sender,
-          receiver: receiver,
-          dp: dp,
-          id: sender,
-          key: msg,
-          time: Date.now()
-        });
+/* ── 3. Boot: show onboarding OR chat ────────────────────────────── */
+window.addEventListener('load', () => {
+  const stored = JSON.parse(localStorage.getItem("chatUser"));
+  if (stored && stored.name) {
+    me   = stored.name;
+    meDp = stored.dp || "";
+    showChatScreen();
+  } else {
+    document.getElementById("onboarding").style.display = "block";
+  }
+});
 
-        document.getElementById("msg").value = "";
+/* ── 4. Onboarding save ──────────────────────────────────────────── */
+function completeOnboarding(){
+  const name = document.getElementById("obName").value.trim();
+  const dp   = document.getElementById("obDp").value.trim();
+  if(!name){ alert("Username required"); return; }
+
+  // save to /users/{name}
+  db.ref(`users/${name}`).set({
+    username: name,
+    dp: dp,
+    createdAt: Date.now()
+  }).then(()=>{
+    localStorage.setItem("chatUser", JSON.stringify({name, dp}));
+    me   = name;
+    meDp = dp;
+    showChatScreen();
+  }).catch(e=>alert("Error: "+e.message));
+}
+
+/* ── 5. Show chat UI, load users list ───────────────────────────── */
+function showChatScreen(){
+  document.getElementById("onboarding").style.display = "none";
+  document.getElementById("chatScreen").style.display = "block";
+  document.getElementById("meHeader").innerHTML = `Logged in as <b>${me}</b>`;
+  loadUserList();
+}
+
+/* ── 6. Load other users into dropdown ──────────────────────────── */
+function loadUserList(){
+  const sel = document.getElementById("receiverSel");
+  sel.innerHTML = "<option value=''>-- choose user --</option>";
+
+  db.ref("users").once("value", snap=>{
+    snap.forEach(child=>{
+      const u = child.key;
+      if(u !== me){
+        const opt = document.createElement("option");
+        opt.value = u;
+        opt.textContent = u;
+        sel.appendChild(opt);
       }
-    }
+    });
+  });
+}
 
-    // Display chat messages
-    function listenForMessages() {
-      const sender = document.getElementById("sender").value.trim();
-      const receiver = document.getElementById("receiver").value.trim();
-      const chatBox = document.getElementById("chat");
-      chatBox.innerHTML = "";
+/* ── 7. Choose receiver, attach listeners ───────────────────────── */
+function chooseReceiver(){
+  const sel = document.getElementById("receiverSel");
+  if(!sel.value){ clearChat(); return; }
+  them = sel.value;
+  clearChat();
+  listenToChat();
+}
 
-      if (!sender || !receiver) return;
+/* ── 8. Listen to BOTH chat paths ───────────────────────────────── */
+function listenToChat(){
+  const box = document.getElementById("chatBox");
 
-      const path = `chat/${sender}/${receiver}`;
-      db.ref(path).on("child_added", function(snapshot) {
-        const data = snapshot.val();
-        const div = document.createElement("div");
-        div.className = "msg";
-        div.innerHTML = `<b>${data.sender}</b>: ${data.key}`;
-        chatBox.appendChild(div);
-        chatBox.scrollTop = chatBox.scrollHeight;
-      });
-    }
+  // detach old listeners if they exist
+  if(chatListenerSent)     chatListenerSent.off();
+  if(chatListenerReceived) chatListenerReceived.off();
 
-    // Auto start listener when user types sender/receiver
-    document.getElementById("sender").addEventListener("change", listenForMessages);
-    document.getElementById("receiver").addEventListener("change", listenForMessages);
-  </script>
+  // my outbound messages
+  chatListenerSent = db.ref(`chat/${me}/${them}`);
+  chatListenerSent.on("child_added", snap=>{
+    renderMsg(snap.val(), true);
+  });
 
+  // messages they sent to me
+  chatListenerReceived = db.ref(`chat/${them}/${me}`);
+  chatListenerReceived.on("child_added", snap=>{
+    renderMsg(snap.val(), false);
+  });
+}
+
+/* ── 9. Send a message ──────────────────────────────────────────── */
+function sendMsg(){
+  if(!them){ alert("Select a user first"); return; }
+  const txt = document.getElementById("msgInput").value.trim();
+  if(!txt) return;
+
+  db.ref(`chat/${me}/${them}`).push({
+    sender:   me,
+    receiver: them,
+    dp:       meDp,
+    id:       me,
+    key:      txt,
+    time:     Date.now()
+  });
+  document.getElementById("msgInput").value = "";
+}
+
+/* ── 10. Render incoming/outgoing message ───────────────────────── */
+function renderMsg(data, isMe){
+  const div = document.createElement("div");
+  div.className = `msg ${isMe? "me":"them"}`;
+  div.innerHTML  = `<b>${data.sender}</b>: ${data.key}`;
+  document.getElementById("chatBox").appendChild(div);
+  // auto‑scroll
+  const box = document.getElementById("chatBox");
+  box.scrollTop = box.scrollHeight;
+}
+
+/* ── 11. Helpers ────────────────────────────────────────────────── */
+function clearChat(){
+  document.getElementById("chatBox").innerHTML = "";
+}
+
+</script>
 </body>
 </html>
