@@ -1,49 +1,35 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Live Chat</title>
+  <title>Private Chat</title>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
   <style>
-    body {
-      font-family: sans-serif;
-      padding: 10px;
-      background: #f5f5f5;
-    }
-    #chat {
-      max-height: 400px;
-      overflow-y: scroll;
-      background: #fff;
-      padding: 10px;
-      border: 1px solid #ccc;
-      margin-bottom: 10px;
-    }
-    .msg {
-      padding: 8px;
-      margin: 5px;
-      border-radius: 6px;
-      background: #e0f7fa;
-      font-size: 14px;
-    }
-    input, button {
-      padding: 8px;
-      font-size: 16px;
-    }
+    body { font-family: sans-serif; background: #f5f5f5; padding: 10px; }
+    #chat { max-height: 400px; overflow-y: scroll; background: white; padding: 10px; border: 1px solid #ccc; margin-bottom: 10px; }
+    .msg { background: #e0f7fa; margin: 5px 0; padding: 8px; border-radius: 6px; font-size: 14px; }
+    input, button { padding: 8px; font-size: 16px; }
   </style>
 </head>
 <body>
 
-  <h2>💬 Chat Room</h2>
+  <h3>🔐 End-to-End Chat</h3>
+
+  <p>
+    Sender: <input id="sender" placeholder="user1" />
+    Receiver: <input id="receiver" placeholder="user2" />
+    DP URL: <input id="dp" placeholder="https://..." style="width: 60%;" />
+  </p>
 
   <div id="chat"></div>
 
-  <input id="msg" type="text" placeholder="Type your message..." style="width: 70%;">
+  <input id="msg" type="text" placeholder="Type a message..." style="width: 70%;">
   <button onclick="send()">Send</button>
 
   <script>
-    // ✅ Your Firebase configuration
+    // Firebase Config
     var firebaseConfig = {
       apiKey: "AIzaSyBPF1VE82Y3VkZe6IibjqKxBC-XHjM_Wco",
       authDomain: "chat-2024-ff149.firebaseapp.com",
@@ -53,32 +39,56 @@
       messagingSenderId: "146349109253",
       appId: "1:146349109253:android:e593afbf0584762519ac6c"
     };
-
-    // ✅ Initialize Firebase
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    // ✅ Send Message
+    // Send message
     function send() {
+      const sender = document.getElementById("sender").value.trim();
+      const receiver = document.getElementById("receiver").value.trim();
+      const dp = document.getElementById("dp").value.trim();
       const msg = document.getElementById("msg").value.trim();
-      if (msg.length > 0) {
-        db.ref("chat").push({
-          text: msg,
+
+      if (sender && receiver && msg) {
+        const refPath = `chat/${sender}/${receiver}`;
+        const msgRef = db.ref(refPath).push();
+
+        msgRef.set({
+          sender: sender,
+          receiver: receiver,
+          dp: dp,
+          id: sender,
+          key: msg,
           time: Date.now()
         });
+
         document.getElementById("msg").value = "";
       }
     }
 
-    // ✅ Display Messages
-    db.ref("chat").on("child_added", function(snapshot) {
-      const msg = snapshot.val().text;
-      const div = document.createElement("div");
-      div.className = "msg";
-      div.textContent = msg;
-      document.getElementById("chat").appendChild(div);
-      document.getElementById("chat").scrollTop = document.getElementById("chat").scrollHeight;
-    });
+    // Display chat messages
+    function listenForMessages() {
+      const sender = document.getElementById("sender").value.trim();
+      const receiver = document.getElementById("receiver").value.trim();
+      const chatBox = document.getElementById("chat");
+      chatBox.innerHTML = "";
+
+      if (!sender || !receiver) return;
+
+      const path = `chat/${sender}/${receiver}`;
+      db.ref(path).on("child_added", function(snapshot) {
+        const data = snapshot.val();
+        const div = document.createElement("div");
+        div.className = "msg";
+        div.innerHTML = `<b>${data.sender}</b>: ${data.key}`;
+        chatBox.appendChild(div);
+        chatBox.scrollTop = chatBox.scrollHeight;
+      });
+    }
+
+    // Auto start listener when user types sender/receiver
+    document.getElementById("sender").addEventListener("change", listenForMessages);
+    document.getElementById("receiver").addEventListener("change", listenForMessages);
   </script>
 
 </body>
