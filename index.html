@@ -1,85 +1,85 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Secure Firebase Chat</title>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/crypto-js@4.1.1/crypto-js.min.js"></script>
+  <title>Live Chat</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
   <style>
-    body { font-family: sans-serif; padding: 20px; background: #f3f3f3; }
-    #messages { max-height: 300px; overflow-y: auto; background: #fff; padding: 10px; border: 1px solid #ccc; margin-bottom: 10px; }
-    .message { margin: 5px 0; }
-    #share { margin-top: 10px; }
+    body {
+      font-family: sans-serif;
+      padding: 10px;
+      background: #f5f5f5;
+    }
+    #chat {
+      max-height: 400px;
+      overflow-y: scroll;
+      background: #fff;
+      padding: 10px;
+      border: 1px solid #ccc;
+      margin-bottom: 10px;
+    }
+    .msg {
+      padding: 8px;
+      margin: 5px;
+      border-radius: 6px;
+      background: #e0f7fa;
+      font-size: 14px;
+    }
+    input, button {
+      padding: 8px;
+      font-size: 16px;
+    }
   </style>
 </head>
 <body>
-  <h2>🔐 Secure Firebase Chat</h2>
-  <div id="roomInfo"></div>
-  <div id="messages"></div>
-  <input type="text" id="msgInput" placeholder="Type your message..." style="width:80%;" />
-  <button id="sendBtn">Send</button>
-  <div id="share"></div>
+
+  <h2>💬 Chat Room</h2>
+
+  <div id="chat"></div>
+
+  <input id="msg" type="text" placeholder="Type your message..." style="width: 70%;">
+  <button onclick="send()">Send</button>
 
   <script>
-    // 🔐 Ask for shared secret key
-    const KEY = prompt("Enter your shared chat key (same as your friend's):");
-    if (!KEY) alert("Chat key is required!");
-
-    // ✅ Firebase Config from your JSON
-    const firebaseConfig = {
+    // ✅ Your Firebase configuration
+    var firebaseConfig = {
       apiKey: "AIzaSyBPF1VE82Y3VkZe6IibjqKxBC-XHjM_Wco",
       authDomain: "chat-2024-ff149.firebaseapp.com",
       databaseURL: "https://chat-2024-ff149-default-rtdb.asia-southeast1.firebasedatabase.app",
       projectId: "chat-2024-ff149",
       storageBucket: "chat-2024-ff149.appspot.com",
       messagingSenderId: "146349109253",
-      appId: "1:146349109253:web:e593afbf0584762519ac6c"
+      appId: "1:146349109253:android:e593afbf0584762519ac6c"
     };
 
+    // ✅ Initialize Firebase
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    // 🆔 Get or generate room ID from URL
-    const urlParams = new URLSearchParams(window.location.search);
-    let room = urlParams.get("room");
-    if (!room) {
-      room = Math.random().toString(36).substring(2, 10);
-      window.history.replaceState(null, "", "?room=" + room);
+    // ✅ Send Message
+    function send() {
+      const msg = document.getElementById("msg").value.trim();
+      if (msg.length > 0) {
+        db.ref("chat").push({
+          text: msg,
+          time: Date.now()
+        });
+        document.getElementById("msg").value = "";
+      }
     }
-    document.getElementById("roomInfo").innerText = "Room ID: " + room;
 
-    // 🔗 Share link
-    document.getElementById("share").innerHTML = `
-      Share this link with friend: <br>
-      <input value="${window.location.href}" style="width:100%;" onclick="this.select()" />
-    `;
-
-    // 🔁 Load messages in real-time
-    const messagesDiv = document.getElementById("messages");
-    db.ref("rooms/" + room + "/messages").on("child_added", (snap) => {
-      const encrypted = snap.val().text;
-      try {
-        const bytes = CryptoJS.AES.decrypt(encrypted, KEY);
-        const original = bytes.toString(CryptoJS.enc.Utf8);
-        const div = document.createElement("div");
-        div.className = "message";
-        div.innerText = original;
-        messagesDiv.appendChild(div);
-        messagesDiv.scrollTop = messagesDiv.scrollHeight;
-      } catch (e) {
-        console.warn("Decryption failed");
-      }
+    // ✅ Display Messages
+    db.ref("chat").on("child_added", function(snapshot) {
+      const msg = snapshot.val().text;
+      const div = document.createElement("div");
+      div.className = "msg";
+      div.textContent = msg;
+      document.getElementById("chat").appendChild(div);
+      document.getElementById("chat").scrollTop = document.getElementById("chat").scrollHeight;
     });
-
-    // 📤 Send message
-    document.getElementById("sendBtn").onclick = () => {
-      const msg = document.getElementById("msgInput").value.trim();
-      if (msg) {
-        const encrypted = CryptoJS.AES.encrypt(msg, KEY).toString();
-        db.ref("rooms/" + room + "/messages").push({ text: encrypted });
-        document.getElementById("msgInput").value = "";
-      }
-    };
   </script>
+
 </body>
 </html>
