@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Firebase Chat • Onboard → Chat</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0">
+  <!-- Firebase v8 SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+  <!-- Font Awesome for icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <style>
+    :root {
+      --primary-color: #25D366;
+      --primary-dark: #128C7E;
+      --primary-light: #DCF8C6;
+      --secondary-light: #ECE5DD;
+      --text-dark: #075E54;
+      --text-light: #ffffff;
+      --bubble-me: #DCF8C6;
+      --bubble-them: #ffffff;
+      --time-color: #888888;
+      --input-bg: #f0f0f0;
+      --notification-color: #FF3B30;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    }
+
+    body {
+      background-color: #e5ddd5;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background-image: url('https://web.whatsapp.com/img/bg-chat-tile-light_a4be512e7195b6b733d9110b408f075d.png');
+    }
+
+    /* Onboarding styles (kept similar to original) */
+    #onboarding {
+      max-width: 400px;
+      margin: 40px auto;
+      padding: 24px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+
+    #onboarding h2 {
+      color: var(--primary-dark);
+      margin-bottom: 16px;
+    }
+
+    #onboarding p {
+      color: #555;
+      margin-bottom: 24px;
+    }
+
+    #onboarding input {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 16px;
+    }
+
+    #onboarding button {
+      background-color: var(--primary-color);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 500;
+      cursor: pointer;
+      width: 100%;
+      transition: background-color 0.2s;
+    }
+
+    #onboarding button:hover {
+      background-color: var(--primary-dark);
+    }
+
+    /* Chat container */
+    #chatScreen {
+      display: none;
+      flex-direction: column;
+      height: 100vh;
+      max-width: 800px;
+      margin: 0 auto;
+      width: 100%;
+      background-color: white;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      position: relative;
+    }
+
+    /* Header */
+    .chat-header {
+      background-color: var(--primary-dark);
+      color: white;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: relative;
+      z-index: 10;
+    }
+
+    .chat-header-info {
+      display: flex;
+      align-items: center;
+    }
+
+    .chat-header img {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      margin-right: 12px;
+      object-fit: cover;
+    }
+
+    .chat-header h3 {
+      margin: 0;
+      font-weight: 500;
+    }
+
+    .chat-header p {
+      font-size: 12px;
+      opacity: 0.8;
+      margin-top: 2px;
+    }
+
+    .chat-header-actions {
+      display: flex;
+      gap: 16px;
+    }
+
+    .chat-header-actions i {
+      cursor: pointer;
+      font-size: 18px;
+    }
+
+    /* Chat body */
+    .chat-body {
+      flex: 1;
+      padding: 16px;
+      overflow-y: auto;
+      background-color: var(--secondary-light);
+      background-image: url('https://web.whatsapp.com/img/bg-chat-tile-light_a4be512e7195b6b733d9110b408f075d.png');
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Message bubbles */
+    .msg {
+      max-width: 70%;
+      margin-bottom: 8px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      position: relative;
+      word-wrap: break-word;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .me {
+      background-color: var(--bubble-me);
+      align-self: flex-end;
+      border-top-right-radius: 0;
+      margin-left: 30%;
+    }
+
+    .them {
+      background-color: var(--bubble-them);
+      align-self: flex-start;
+      border-top-left-radius: 0;
+      box-shadow: 0 1px 1px rgba(0,0,0,0.1);
+    }
+
+    .msg-sender {
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--text-dark);
+      margin-bottom: 4px;
+    }
+
+    .msg-text {
+      font-size: 15px;
+      line-height: 1.4;
+    }
+
+    .msg-time {
+      font-size: 11px;
+      color: var(--time-color);
+      text-align: right;
+      margin-top: 4px;
+      margin-left: 8px;
+      display: inline-block;
+      float: right;
+    }
+
+    /* Input area */
+    .chat-input {
+      display: flex;
+      padding: 12px;
+      background-color: var(--input-bg);
+      align-items: center;
+      border-top: 1px solid #ddd;
+    }
+
+    .chat-input input {
+      flex: 1;
+      padding: 12px 16px;
+      border: none;
+      border-radius: 20px;
+      font-size: 15px;
+      outline: none;
+      background-color: white;
+    }
+
+    .chat-input button {
+      background-color: var(--primary-color);
+      color: white;
+      border: none;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      margin-left: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background-color 0.2s;
+    }
+
+    .chat-input button:hover {
+      background-color: var(--primary-dark);
+    }
+
+    /* User selection */
+    .user-selection {
+      padding: 12px;
+      background-color: white;
+      border-bottom: 1px solid #eee;
+      position: relative;
+    }
+
+    .user-selection select {
+      width: 100%;
+      padding: 10px;
+      border-radius: 20px;
+      border: 1px solid #ddd;
+      font-size: 14px;
+      outline: none;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      background-size: 16px;
+    }
+
+    /* Status bar */
+    .status-bar {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 16px;
+      background-color: var(--primary-dark);
+      color: white;
+      font-size: 14px;
+    }
+
+    /* Notification badge */
+    .notification-badge {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      background-color: var(--notification-color);
+      color: white;
+      border-radius: 50%;
+      width: 18px;
+      height: 18px;
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+      100% { transform: scale(1); }
+    }
+
+    /* User option with notification */
+    .user-option {
+      position: relative;
+    }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #f1f1f1;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #ccc;
+      border-radius: 3px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #aaa;
+    }
+
+    /* Timestamp formatting */
+    .timestamp {
+      font-size: 11px;
+      color: var(--time-color);
+      display: inline-block;
+      margin-left: 8px;
+    }
+
+    /* Empty state */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      color: #888;
+      text-align: center;
+      padding: 20px;
+    }
+
+    .empty-state i {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    /* Unread message indicator */
+    .unread-indicator {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 8px;
+      height: 8px;
+      background-color: var(--notification-color);
+      border-radius: 50%;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Onboarding Screen ───────────────────────────────────────────── -->
+<div id="onboarding">
+  <h2>Welcome 👋</h2>
+  <p>Pick a unique <b>username</b> and optional display‑picture URL.</p>
+  <input id="obName" placeholder="Username (e.g. suzzy)" style="width:100%;margin-bottom:8px"><br>
+  <input id="obDp"   placeholder="DP image URL (optional)" style="width:100%;margin-bottom:12px"><br>
+  <button onclick="completeOnboarding()">Save &amp; Continue ➜</button>
+</div>
+
+<!-- ── Chat Screen ─────────────────────────────────────────────────── -->
+<div id="chatScreen">
+  <div class="status-bar">
+    <span id="meHeader"></span>
+    <span id="currentTime"></span>
+  </div>
+
+  <div class="user-selection">
+    <select id="receiverSel" onchange="chooseReceiver()">
+      <option value="">Select a user to chat with</option>
+    </select>
+  </div>
+
+  <div class="chat-body" id="chatBox">
+    <div class="empty-state" id="emptyState">
+      <i class="far fa-comment-dots"></i>
+      <h3>Select a user to start chatting</h3>
+      <p>Your messages will appear here</p>
+    </div>
+  </div>
+
+  <div class="chat-input">
+    <input id="msgInput" placeholder="Type a message…">
+    <button onclick="sendMsg()">
+      <i class="fas fa-paper-plane"></i>
+    </button>
+  </div>
+</div>
+
+<script>
+/* ── 1. Firebase CONFIG with your keys ───────────────────────────── */
+var firebaseConfig = {
+  apiKey:            "AIzaSyBPF1VE82Y3VkZe6IibjqKxBC-XHjM_Wco",
+  authDomain:        "chat-2024-ff149.firebaseapp.com",
+  databaseURL:       "https://chat-2024-ff149-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:         "chat-2024-ff149",
+  storageBucket:     "chat-2024-ff149.appspot.com",
+  messagingSenderId: "146349109253",
+  appId:             "1:146349109253:android:e593afbf0584762519ac6c"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+/* ── 2. Simple state ─────────────────────────────────────────────── */
+let me   = null;   // my username
+let meDp = "";     // my dp url
+let them = null;   // current receiver
+let chatListenerSent     = null;
+let chatListenerReceived = null;
+let unreadMessages = {}; // Track unread messages per user
+let globalMessageListener = null; // Listener for all incoming messages
+
+/* ── 3. Boot: show onboarding OR chat ────────────────────────────── */
+window.addEventListener('load', () => {
+  // Update current time
+  updateTime();
+  setInterval(updateTime, 60000);
+  
+  const stored = JSON.parse(localStorage.getItem("chatUser"));
+  if (stored && stored.name) {
+    me   = stored.name;
+    meDp = stored.dp || "";
+    showChatScreen();
+    setupGlobalMessageListener();
+  } else {
+    document.getElementById("onboarding").style.display = "block";
+  }
+});
+
+function updateTime() {
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+  document.getElementById("currentTime").textContent = timeStr;
+}
+
+/* ── 4. Onboarding save ──────────────────────────────────────────── */
+function completeOnboarding(){
+  const name = document.getElementById("obName").value.trim();
+  const dp   = document.getElementById("obDp").value.trim();
+  if(!name){ alert("Username required"); return; }
+
+  // save to /users/{name}
+  db.ref(`users/${name}`).set({
+    username: name,
+    dp: dp,
+    createdAt: Date.now()
+  }).then(()=>{
+    localStorage.setItem("chatUser", JSON.stringify({name, dp}));
+    me   = name;
+    meDp = dp;
+    showChatScreen();
+    setupGlobalMessageListener();
+  }).catch(e=>alert("Error: "+e.message));
+}
+
+/* ── 5. Show chat UI, load users list ───────────────────────────── */
+function showChatScreen(){
+  document.getElementById("onboarding").style.display = "none";
+  document.getElementById("chatScreen").style.display = "flex";
+  document.getElementById("meHeader").innerHTML = `Logged in as <b>${me}</b>`;
+  loadUserList();
+}
+
+/* ── 6. Load other users into dropdown ──────────────────────────── */
+function loadUserList(){
+  const sel = document.getElementById("receiverSel");
+  sel.innerHTML = "<option value=''>-- choose user --</option>";
+
+  db.ref("users").once("value", snap=>{
+    snap.forEach(child=>{
+      const u = child.key;
+      if(u !== me){
+        const opt = document.createElement("option");
+        opt.value = u;
+        opt.textContent = u;
+        
+        // Add notification badge if there are unread messages
+        if(unreadMessages[u] && unreadMessages[u] > 0) {
+          const badge = document.createElement("span");
+          badge.className = "unread-indicator";
+          opt.appendChild(badge);
+        }
+        
+        sel.appendChild(opt);
+      }
+    });
+  });
+}
+
+/* ── 7. Setup global message listener for notifications ─────────── */
+function setupGlobalMessageListener() {
+  if (globalMessageListener) {
+    globalMessageListener.off(); // Remove previous listener if exists
+  }
+  
+  globalMessageListener = db.ref(`chat`);
+  globalMessageListener.on("child_added", senderSnap => {
+    // Only listen to messages sent to me (not from me)
+    if (senderSnap.key !== me) {
+      senderSnap.ref.child(me).on("child_added", messageSnap => {
+        const message = messageSnap.val();
+        
+        // Only show notification if it's not the current chat
+        if (them !== senderSnap.key) {
+          // Increment unread count for this sender
+          if (!unreadMessages[senderSnap.key]) {
+            unreadMessages[senderSnap.key] = 0;
+          }
+          unreadMessages[senderSnap.key]++;
+          
+          // Update the dropdown to show notification
+          loadUserList();
+          
+          // Show desktop notification if browser supports it
+          if (Notification.permission === "granted") {
+            new Notification(`New message from ${message.sender}`, {
+              body: message.key,
+              icon: message.dp || 'https://web.whatsapp.com/img/favicon/1x/favicon.png'
+            });
+          } else if (Notification.permission !== "denied") {
+            Notification.requestPermission().then(permission => {
+              if (permission === "granted") {
+                new Notification(`New message from ${message.sender}`, {
+                  body: message.key,
+                  icon: message.dp || 'https://web.whatsapp.com/img/favicon/1x/favicon.png'
+                });
+              }
+            });
+          }
+        }
+      });
+    }
+  });
+}
+
+/* ── 8. Choose receiver, attach listeners ───────────────────────── */
+function chooseReceiver(){
+  const sel = document.getElementById("receiverSel");
+  if(!sel.value){ clearChat(); return; }
+  them = sel.value;
+  clearChat();
+  listenToChat();
+  
+  // Reset unread count for this user
+  if (unreadMessages[them]) {
+    unreadMessages[them] = 0;
+    loadUserList(); // Update the dropdown
+  }
+  
+  // Hide empty state
+  document.getElementById("emptyState").style.display = "none";
+}
+
+/* ── 9. Listen to BOTH chat paths ───────────────────────────────── */
+function listenToChat(){
+  const box = document.getElementById("chatBox");
+
+  // detach old listeners if they exist
+  if(chatListenerSent)     chatListenerSent.off();
+  if(chatListenerReceived) chatListenerReceived.off();
+
+  // my outbound messages
+  chatListenerSent = db.ref(`chat/${me}/${them}`);
+  chatListenerSent.on("child_added", snap=>{
+    renderMsg(snap.val(), true);
+  });
+
+  // messages they sent to me
+  chatListenerReceived = db.ref(`chat/${them}/${me}`);
+  chatListenerReceived.on("child_added", snap=>{
+    renderMsg(snap.val(), false);
+  });
+}
+
+/* ── 10. Send a message ──────────────────────────────────────────── */
+function sendMsg(){
+  if(!them){ alert("Select a user first"); return; }
+  const input = document.getElementById("msgInput");
+  const txt = input.value.trim();
+  if(!txt) return;
+
+  db.ref(`chat/${me}/${them}`).push({
+    sender:   me,
+    receiver: them,
+    dp:       meDp,
+    id:       me,
+    key:      txt,
+    time:     Date.now()
+  });
+  input.value = "";
+}
+
+/* ── 11. Render incoming/outgoing message ───────────────────────── */
+function renderMsg(data, isMe){
+  const box = document.getElementById("chatBox");
+  
+  // Hide empty state if it's visible
+  document.getElementById("emptyState").style.display = "none";
+  
+  const div = document.createElement("div");
+  div.className = `msg ${isMe? "me":"them"}`;
+  
+  // Format time
+  const time = new Date(data.time);
+  const timeStr = time.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+  
+  div.innerHTML = `
+    ${!isMe ? `<div class="msg-sender">${data.sender}</div>` : ''}
+    <div class="msg-text">${data.key}</div>
+    <span class="msg-time">${timeStr}</span>
+  `;
+  
+  box.appendChild(div);
+  
+  // auto‑scroll
+  box.scrollTop = box.scrollHeight;
+  
+  // Add animation
+  div.style.animation = "fadeIn 0.3s ease";
+}
+
+/* ── 12. Helpers ────────────────────────────────────────────────── */
+function clearChat(){
+  const box = document.getElementById("chatBox");
+  box.innerHTML = `
+    <div class="empty-state" id="emptyState">
+      <i class="far fa-comment-dots"></i>
+      <h3>Select a user to start chatting</h3>
+      <p>Your messages will appear here</p>
+    </div>
+  `;
+}
+
+// Handle Enter key for sending messages
+document.getElementById("msgInput").addEventListener("keypress", function(e) {
+  if (e.key === "Enter") {
+    sendMsg();
+  }
+});
+
+// Request notification permission when page loads
+if (Notification.permission !== "granted" && Notification.permission !== "denied") {
+  Notification.requestPermission();
+}
+
+</script>
+</body>
+</html>
