@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>WhatsApp-style Chat</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <style>
+    :root {
+      --primary: #25D366;
+      --primary-dark: #128C7E;
+      --bubble-me: #DCF8C6;
+      --bubble-them: #FFFFFF;
+      --unread: #FF3B30;
+      --text-dark: #075E54;
+      --text-light: #FFFFFF;
+      --time-color: #888888;
+      --input-bg: #F0F0F0;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: #E5DDD5;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background-image: url('https://web.whatsapp.com/img/bg-chat-tile-light_a4be512e7195b6b733d9110b408f075d.png');
+    }
+
+    /* Onboarding */
+    #onboarding {
+      max-width: 400px;
+      margin: 40px auto;
+      padding: 24px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+      text-align: center;
+      width: calc(100% - 32px);
+    }
+
+    #onboarding h2 {
+      color: var(--primary-dark);
+      margin-bottom: 16px;
+      font-size: 24px;
+    }
+
+    #onboarding p {
+      color: #555;
+      margin-bottom: 24px;
+      font-size: 16px;
+    }
+
+    #onboarding input {
+      width: 100%;
+      padding: 14px 16px;
+      margin-bottom: 12px;
+      border: 1px solid #DDD;
+      border-radius: 8px;
+      font-size: 16px;
+    }
+
+    #onboarding button {
+      background-color: var(--primary);
+      color: white;
+      border: none;
+      padding: 14px 24px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 500;
+      cursor: pointer;
+      width: 100%;
+      transition: background-color 0.2s;
+    }
+
+    /* Chat Screen */
+    #chatScreen {
+      display: none;
+      flex-direction: column;
+      height: 100vh;
+      width: 100%;
+      max-width: 800px;
+      margin: 0 auto;
+      background-color: white;
+    }
+
+    /* Header */
+    .header {
+      background-color: var(--primary-dark);
+      color: white;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .header-info {
+      display: flex;
+      align-items: center;
+    }
+
+    .header h3 {
+      margin: 0;
+      font-weight: 500;
+      font-size: 18px;
+    }
+
+    /* User Selection */
+    .user-selection {
+      padding: 12px;
+      background-color: white;
+      border-bottom: 1px solid #EEE;
+    }
+
+    .user-selection select {
+      width: 100%;
+      padding: 12px 16px;
+      border-radius: 24px;
+      border: 1px solid #DDD;
+      font-size: 16px;
+      outline: none;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+      background-repeat: no-repeat;
+      background-position: right 16px center;
+      background-size: 16px;
+    }
+
+    /* Chat Body */
+    .chat-body {
+      flex: 1;
+      padding: 16px;
+      overflow-y: auto;
+      background-color: #ECE5DD;
+      background-image: url('https://web.whatsapp.com/img/bg-chat-tile-light_a4be512e7195b6b733d9110b408f075d.png');
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Message Bubbles */
+    .message {
+      max-width: 80%;
+      margin-bottom: 8px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      position: relative;
+      word-wrap: break-word;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .me {
+      background-color: var(--bubble-me);
+      align-self: flex-end;
+      border-top-right-radius: 0;
+    }
+
+    .them {
+      background-color: var(--bubble-them);
+      align-self: flex-start;
+      border-top-left-radius: 0;
+      box-shadow: 0 1px 1px rgba(0,0,0,0.1);
+    }
+
+    .sender {
+      font-weight: 600;
+      font-size: 15px;
+      color: var(--text-dark);
+      margin-bottom: 6px;
+    }
+
+    .text {
+      font-size: 16px;
+      line-height: 1.4;
+    }
+
+    .time {
+      font-size: 12px;
+      color: var(--time-color);
+      text-align: right;
+      margin-top: 4px;
+      margin-left: 8px;
+      display: inline-block;
+      float: right;
+    }
+
+    /* Input Area */
+    .input-area {
+      display: flex;
+      padding: 12px;
+      background-color: var(--input-bg);
+      align-items: center;
+      border-top: 1px solid #DDD;
+    }
+
+    .input-area input {
+      flex: 1;
+      padding: 14px 16px;
+      border: none;
+      border-radius: 24px;
+      font-size: 16px;
+      outline: none;
+      background-color: white;
+      min-height: 48px;
+    }
+
+    .input-area button {
+      background-color: var(--primary);
+      color: white;
+      border: none;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      margin-left: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background-color 0.2s;
+    }
+
+    /* Empty State */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      color: #888;
+      text-align: center;
+      padding: 20px;
+    }
+
+    .empty-state i {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    /* Unread Indicator */
+    .unread {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      background-color: var(--unread);
+      border-radius: 50%;
+      margin-left: 6px;
+      vertical-align: middle;
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.2); }
+      100% { transform: scale(1); }
+    }
+
+    /* Mobile Optimizations */
+    @media (max-width: 600px) {
+      .message {
+        max-width: 85%;
+        padding: 10px 12px;
+      }
+      
+      .input-area input {
+        padding: 12px 14px;
+        min-height: 44px;
+      }
+      
+      .input-area button {
+        width: 44px;
+        height: 44px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Onboarding Screen -->
+<div id="onboarding">
+  <h2>Welcome to ChatApp 👋</h2>
+  <p>Enter a username to get started</p>
+  <input id="obName" placeholder="Your username (e.g. alex)">
+  <input id="obDp" placeholder="Profile picture URL (optional)">
+  <button onclick="completeOnboarding()">Start Chatting</button>
+</div>
+
+<!-- Chat Screen -->
+<div id="chatScreen">
+  <div class="header">
+    <div class="header-info">
+      <h3 id="meHeader"></h3>
+    </div>
+  </div>
+
+  <div class="user-selection">
+    <select id="receiverSel" onchange="chooseReceiver()">
+      <option value="">Select a user to chat with</option>
+    </select>
+  </div>
+
+  <div class="chat-body" id="chatBox">
+    <div class="empty-state" id="emptyState">
+      <i class="far fa-comment-dots"></i>
+      <h3>No chat selected</h3>
+      <p>Choose a user to start messaging</p>
+    </div>
+  </div>
+
+  <div class="input-area">
+    <input id="msgInput" placeholder="Type a message..." onkeypress="handleKeyPress(event)">
+    <button onclick="sendMsg()">
+      <i class="fas fa-paper-plane"></i>
+    </button>
+  </div>
+</div>
+
+<script>
+// Firebase Configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyBPF1VE82Y3VkZe6IibjqKxBC-XHjM_Wco",
+  authDomain: "chat-2024-ff149.firebaseapp.com",
+  databaseURL: "https://chat-2024-ff149-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "chat-2024-ff149",
+  storageBucket: "chat-2024-ff149.appspot.com",
+  messagingSenderId: "146349109253",
+  appId: "1:146349109253:android:e593afbf0584762519ac6c"
+};
+
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+// App State
+let me = null;
+let meDp = "";
+let them = null;
+let chatListenerSent = null;
+let chatListenerReceived = null;
+let unreadMessages = {};
+let globalMessageListener = null;
+
+// Initialize App
+window.addEventListener('load', () => {
+  const storedUser = JSON.parse(localStorage.getItem("chatUser"));
+  if (storedUser && storedUser.name) {
+    me = storedUser.name;
+    meDp = storedUser.dp || "";
+    showChatScreen();
+    setupGlobalMessageListener();
+  } else {
+    document.getElementById("onboarding").style.display = "block";
+  }
+  
+  // Request notification permission
+  if (Notification.permission !== "granted" && Notification.permission !== "denied") {
+    Notification.requestPermission();
+  }
+});
+
+// Onboarding
+function completeOnboarding() {
+  const name = document.getElementById("obName").value.trim();
+  const dp = document.getElementById("obDp").value.trim();
+  
+  if (!name) {
+    alert("Please enter a username");
+    return;
+  }
+
+  db.ref(`users/${name}`).set({
+    username: name,
+    dp: dp,
+    createdAt: Date.now()
+  }).then(() => {
+    localStorage.setItem("chatUser", JSON.stringify({ name, dp }));
+    me = name;
+    meDp = dp;
+    showChatScreen();
+    setupGlobalMessageListener();
+  }).catch(error => {
+    alert("Error: " + error.message);
+  });
+}
+
+// Show Chat Screen
+function showChatScreen() {
+  document.getElementById("onboarding").style.display = "none";
+  document.getElementById("chatScreen").style.display = "flex";
+  document.getElementById("meHeader").textContent = me;
+  loadUserList();
+}
+
+// Load Users
+function loadUserList() {
+  const select = document.getElementById("receiverSel");
+  select.innerHTML = "<option value=''>Select a user to chat with</option>";
+
+  db.ref("users").once("value", snapshot => {
+    snapshot.forEach(child => {
+      const username = child.key;
+      if (username !== me) {
+        const option = document.createElement("option");
+        option.value = username;
+        option.textContent = username;
+        
+        if (unreadMessages[username] > 0) {
+          const unread = document.createElement("span");
+          unread.className = "unread";
+          option.appendChild(unread);
+        }
+        
+        select.appendChild(option);
+      }
+    });
+  });
+}
+
+// Global Message Listener
+function setupGlobalMessageListener() {
+  if (globalMessageListener) {
+    globalMessageListener.off();
+  }
+
+  globalMessageListener = db.ref(`chat`);
+  globalMessageListener.on("child_added", senderSnapshot => {
+    if (senderSnapshot.key !== me) {
+      senderSnapshot.ref.child(me).on("child_added", messageSnapshot => {
+        const message = messageSnapshot.val();
+        
+        if (them !== senderSnapshot.key) {
+          // Update unread count
+          if (!unreadMessages[senderSnapshot.key]) {
+            unreadMessages[senderSnapshot.key] = 0;
+          }
+          unreadMessages[senderSnapshot.key]++;
+          
+          // Update UI
+          loadUserList();
+          
+          // Show notification
+          showNotification(message.sender, message.key);
+        }
+      });
+    }
+  });
+}
+
+// Show Notification
+function showNotification(sender, message) {
+  if (Notification.permission === "granted") {
+    new Notification(`New message from ${sender}`, {
+      body: message,
+      icon: 'https://web.whatsapp.com/img/favicon/1x/favicon.png'
+    });
+  }
+}
+
+// Choose Receiver
+function chooseReceiver() {
+  const select = document.getElementById("receiverSel");
+  if (!select.value) {
+    clearChat();
+    return;
+  }
+  
+  them = select.value;
+  clearChat();
+  listenToChat();
+  
+  // Clear unread count
+  if (unreadMessages[them]) {
+    unreadMessages[them] = 0;
+    loadUserList();
+  }
+  
+  // Hide empty state
+  document.getElementById("emptyState").style.display = "none";
+}
+
+// Listen to Chat
+function listenToChat() {
+  const chatBox = document.getElementById("chatBox");
+
+  // Remove old listeners
+  if (chatListenerSent) chatListenerSent.off();
+  if (chatListenerReceived) chatListenerReceived.off();
+
+  // Sent messages
+  chatListenerSent = db.ref(`chat/${me}/${them}`);
+  chatListenerSent.on("child_added", snapshot => {
+    renderMessage(snapshot.val(), true);
+  });
+
+  // Received messages
+  chatListenerReceived = db.ref(`chat/${them}/${me}`);
+  chatListenerReceived.on("child_added", snapshot => {
+    renderMessage(snapshot.val(), false);
+  });
+}
+
+// Render Message
+function renderMessage(data, isMe) {
+  const chatBox = document.getElementById("chatBox");
+  const time = new Date(data.time);
+  const timeString = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  const messageDiv = document.createElement("div");
+  messageDiv.className = `message ${isMe ? 'me' : 'them'}`;
+  messageDiv.innerHTML = `
+    ${!isMe ? `<div class="sender">${data.sender}</div>` : ''}
+    <div class="text">${data.key}</div>
+    <span class="time">${timeString}</span>
+  `;
+
+  chatBox.appendChild(messageDiv);
+  chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+// Send Message
+function sendMsg() {
+  if (!them) {
+    alert("Please select a user first");
+    return;
+  }
+
+  const input = document.getElementById("msgInput");
+  const message = input.value.trim();
+  
+  if (!message) return;
+
+  db.ref(`chat/${me}/${them}`).push({
+    sender: me,
+    receiver: them,
+    dp: meDp,
+    id: me,
+    key: message,
+    time: Date.now()
+  });
+
+  input.value = "";
+}
+
+// Clear Chat
+function clearChat() {
+  document.getElementById("chatBox").innerHTML = `
+    <div class="empty-state" id="emptyState">
+      <i class="far fa-comment-dots"></i>
+      <h3>No chat selected</h3>
+      <p>Choose a user to start messaging</p>
+    </div>
+  `;
+}
+
+// Handle Enter Key
+function handleKeyPress(event) {
+  if (event.key === "Enter") {
+    sendMsg();
+  }
+}
+</script>
+</body>
+</html>
